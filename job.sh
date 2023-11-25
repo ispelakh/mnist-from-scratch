@@ -7,4 +7,4 @@
 #SBATCH --mem=10G  # max memory
 #SBATCH -J "mnist-test"  # job name
 
-./main.o
+./main
