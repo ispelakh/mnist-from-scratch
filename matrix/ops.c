@@ -11,12 +11,27 @@ int check_dimensions(Matrix *m1, Matrix *m2) {
 Matrix* multiply(Matrix *m1, Matrix *m2) {
 	if (check_dimensions(m1, m2)) {
 		Matrix *m = matrix_create(m1->rows, m1->cols);
+
+		// Temporary pointers for the data mapping
+		double **m1_entries = m1->entries;
+		double **m2_entries = m2->entries;
+		double **m_entries = m->entries;
+
+		// Map the data to the device (GPU)
+		#pragma omp target enter data map(to: m1[:1], m2[:1])
+		#pragma omp target enter data map(to: m1_entries[:m1->rows * m1->cols],m2_entries[:m2->rows * m2->cols])
+		#pragma omp target enter data map(alloc: m_entries[:m->rows * m->cols])
+
+		//Perform matrix multiplication on the GPU
 		# pragma omp parallel for num_threads(NUM_THREADS) collapse(2)
 		for (int i = 0; i < m1->rows; i++) {
 			for (int j = 0; j < m2->cols; j++) {
 				m->entries[i][j] = m1->entries[i][j] * m2->entries[i][j];
 			}
 		}
+		// Retrieve the results from the device (you can merge this codes to above map to as we
+		#pragma omp target exit data map(from: m_entries[:m->rows * m->cols])
+		#pragma omp target exit data map(delete: m1_entries[:m1->rows * m1->cols],m2_entries[:m2->rows * m2->cols])
 		return m;
 	} else {
 		printf("Dimension mistmatch multiply: %dx%d %dx%d\n", m1->rows, m1->cols, m2->rows, m2->cols);
@@ -27,12 +42,27 @@ Matrix* multiply(Matrix *m1, Matrix *m2) {
 Matrix* add(Matrix *m1, Matrix *m2) {
 	if (check_dimensions(m1, m2)) {
 		Matrix *m = matrix_create(m1->rows, m1->cols);
+
+		// Temporary pointers for the data mapping
+		double **m1_entries = m1->entries;
+		double **m2_entries = m2->entries;
+		double **m_entries = m->entries;
+
+		// Map the data to the device (GPU)
+		#pragma omp target enter data map(to: m1[:1], m2[:1])
+		#pragma omp target enter data map(to: m1_entries[:m1->rows * m1->cols],m2_entries[:m2->rows * m2->cols])
+		#pragma omp target enter data map(alloc: m_entries[:m->rows * m->cols])
+
 		# pragma omp parallel for num_threads(NUM_THREADS) collapse(2)
 		for (int i = 0; i < m1->rows; i++) {
 			for (int j = 0; j < m2->cols; j++) {
 				m->entries[i][j] = m1->entries[i][j] + m2->entries[i][j];
 			}
 		}
+		// Retrieve the results from the device (you can merge this codes to above map to as we
+		#pragma omp target exit data map(from: m_entries[:m->rows * m->cols])
+		#pragma omp target exit data map(delete: m1_entries[:m1->rows * m1->cols],m2_entries[:m2->rows * m2->cols])
+		
 		return m;
 	} else {
 		printf("Dimension mistmatch add: %dx%d %dx%d\n", m1->rows, m1->cols, m2->rows, m2->cols);
@@ -43,12 +73,26 @@ Matrix* add(Matrix *m1, Matrix *m2) {
 Matrix* subtract(Matrix *m1, Matrix *m2) {
 	if (check_dimensions(m1, m2)) {
 		Matrix *m = matrix_create(m1->rows, m1->cols);
+		// Temporary pointers for the data mapping
+		double **m1_entries = m1->entries;
+		double **m2_entries = m2->entries;
+		double **m_entries = m->entries;
+
+		// Map the data to the device (GPU)
+		#pragma omp target enter data map(to: m1[:1], m2[:1])
+		#pragma omp target enter data map(to: m1_entries[:m1->rows * m1->cols],m2_entries[:m2->rows * m2->cols])
+		#pragma omp target enter data map(alloc: m_entries[:m->rows * m->cols])
+
 		# pragma omp parallel for num_threads(NUM_THREADS) collapse(2)
 		for (int i = 0; i < m1->rows; i++) {
 			for (int j = 0; j < m2->cols; j++) {
 				m->entries[i][j] = m1->entries[i][j] - m2->entries[i][j];
 			}
 		}
+		// Retrieve the results from the device (you can merge this codes to above map to as we
+		#pragma omp target exit data map(from: m_entries[:m->rows * m->cols])
+		#pragma omp target exit data map(delete: m1_entries[:m1->rows * m1->cols],m2_entries[:m2->rows * m2->cols])
+		
 		return m;
 	} else {
 		printf("Dimension mistmatch subtract: %dx%d %dx%d\n", m1->rows, m1->cols, m2->rows, m2->cols);
@@ -58,18 +102,39 @@ Matrix* subtract(Matrix *m1, Matrix *m2) {
 
 Matrix* apply(double (*func)(double), Matrix* m) {
 	Matrix *mat = matrix_copy(m);
+	// Temporary pointers for the data mapping
+	double **m_entries = m->entries;
+	double **mat_entries = mat->entries;
+
+	#pragma omp target enter data map(to: m[:1])
+	#pragma omp target enter data map(to: m_entries[:m->rows * m->cols])
+	#pragma omp target enter data map(alloc: mat_entries[:mat->rows * mat->cols])
+
 	# pragma omp parallel for num_threads(NUM_THREADS) collapse(2)
 	for (int i = 0; i < m->rows; i++) {
 		for (int j = 0; j < m->cols; j++) {
 			mat->entries[i][j] = (*func)(m->entries[i][j]);
 		}
 	}
+	#pragma omp target exit data map(from: mat_entries[:mat->rows * mat->cols])
+	#pragma omp target exit data map(delete: m_entries[:m->rows * m->cols])
+		
 	return mat;
 }
 
 Matrix* dot(Matrix *m1, Matrix *m2) {
 	if (m1->cols == m2->rows) {
 		Matrix *m = matrix_create(m1->rows, m2->cols);
+		// Temporary pointers for the data mapping
+		double **m1_entries = m1->entries;
+		double **m2_entries = m2->entries;
+		double **m_entries = m->entries;
+
+		// Map the data to the device (GPU)
+		#pragma omp target enter data map(to: m1[:1], m2[:1])
+		#pragma omp target enter data map(to: m1_entries[:m1->rows * m1->cols],m2_entries[:m2->rows * m2->cols])
+		#pragma omp target enter data map(alloc: m_entries[:m->rows * m->cols])
+
 		# pragma omp parallel for num_threads(NUM_THREADS) collapse(2)
 		for (int i = 0; i < m1->rows; i++) {
 			for (int j = 0; j < m2->cols; j++) {
@@ -80,6 +145,10 @@ Matrix* dot(Matrix *m1, Matrix *m2) {
 				m->entries[i][j] = sum;
 			}
 		}
+		// Retrieve the results from the device (you can merge this codes to above map to as we
+		#pragma omp target exit data map(from: m_entries[:m->rows * m->cols])
+		#pragma omp target exit data map(delete: m1_entries[:m1->rows * m1->cols],m2_entries[:m2->rows * m2->cols])
+		
 		return m;
 	} else {
 		printf("Dimension mistmatch dot: %dx%d %dx%d\n", m1->rows, m1->cols, m2->rows, m2->cols);
@@ -89,33 +158,66 @@ Matrix* dot(Matrix *m1, Matrix *m2) {
 
 Matrix* scale(double n, Matrix* m) {
 	Matrix* mat = matrix_copy(m);
+	// Temporary pointers for the data mapping
+	double **m_entries = m->entries;
+	double **mat_entries = mat->entries;
+
+	#pragma omp target enter data map(to: m[:1])
+	#pragma omp target enter data map(to: m_entries[:m->rows * m->cols])
+	#pragma omp target enter data map(alloc: mat_entries[:mat->rows * mat->cols])
+
 	# pragma omp parallel for num_threads(NUM_THREADS) collapse(2)
 	for (int i = 0; i < m->rows; i++) {
 		for (int j = 0; j < m->cols; j++) {
 			mat->entries[i][j] *= n;
 		}
 	}
+	#pragma omp target exit data map(from: mat_entries[:mat->rows * mat->cols])
+	#pragma omp target exit data map(delete: m_entries[:m->rows * m->cols])
+		
 	return mat;
 }
 
 Matrix* addScalar(double n, Matrix* m) {
 	Matrix* mat = matrix_copy(m);
+	// Temporary pointers for the data mapping
+	double **m_entries = m->entries;
+	double **mat_entries = mat->entries;
+
+	#pragma omp target enter data map(to: m[:1])
+	#pragma omp target enter data map(to: m_entries[:m->rows * m->cols])
+	#pragma omp target enter data map(alloc: mat_entries[:mat->rows * mat->cols])
+
 	# pragma omp parallel for num_threads(NUM_THREADS) collapse(2)
 	for (int i = 0; i < m->rows; i++) {
 		for (int j = 0; j < m->cols; j++) {
 			mat->entries[i][j] += n;
 		}
 	}
+	#pragma omp target exit data map(from: mat_entries[:mat->rows * mat->cols])
+	#pragma omp target exit data map(delete: m_entries[:m->rows * m->cols])
+		
 	return mat;
 }
 
 Matrix* transpose(Matrix* m) {
 	Matrix* mat = matrix_create(m->cols, m->rows);
+	// Temporary pointers for the data mapping
+	double **m_entries = m->entries;
+	double **mat_entries = mat->entries;
+
+	#pragma omp target enter data map(to: m[:1])
+	#pragma omp target enter data map(to: m_entries[:m->rows * m->cols])
+	#pragma omp target enter data map(alloc: mat_entries[:mat->rows * mat->cols])
+
 	# pragma omp parallel for num_threads(NUM_THREADS) collapse(2)
 	for (int i = 0; i < m->rows; i++) {
 		for (int j = 0; j < m->cols; j++) {
 			mat->entries[j][i] = m->entries[i][j];
 		}
 	}
+	#pragma omp target exit data map(from: mat_entries[:mat->rows * mat->cols])
+	#pragma omp target exit data map(delete: m_entries[:m->rows * m->cols])
+		
 	return mat;
 }
